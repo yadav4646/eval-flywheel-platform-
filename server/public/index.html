@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SQL Analyst</title>
+<style>
+  :root { --bg:#fafaf9; --fg:#1c1917; --muted:#78716c; --line:#e7e5e4; --card:#fff; --accent:#2563eb; --ok:#15803d; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1917; --fg:#f5f5f4; --muted:#a8a29e; --line:#44403c; --card:#292524; --accent:#60a5fa; --ok:#4ade80; --bad:#f87171; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; } p.sub { color: var(--muted); margin: 0 0 20px; }
+  form { display:flex; gap:8px; } input[type=text] { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); font:inherit; }
+  button { padding:9px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:16px; }
+  .answer { font-size:17px; } pre { white-space:pre-wrap; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:13px; overflow-x:auto; }
+  .tablewrap { overflow-x:auto; } table { border-collapse:collapse; font-size:13px; width:100%; } th, td { border-bottom:1px solid var(--line); padding:4px 8px; text-align:left; white-space:nowrap; }
+  .fb { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; } textarea { width:100%; min-height:70px; font:13px ui-monospace, monospace; border:1px solid var(--line); border-radius:8px; padding:8px; background:var(--bg); color:var(--fg); }
+  .muted { color:var(--muted); font-size:13px; } .ok { color:var(--ok); } .bad { color:var(--bad); } .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SQL Analyst</h1>
+  <p class="sub">Ask a question about the shop's orders, products, customers and reviews. Your feedback becomes eval data.</p>
+  <form id="ask"><input id="q" type="text" placeholder="e.g. What was total revenue in 2024?" autocomplete="off" required /><button class="primary">Ask</button></form>
+  <div id="out" class="card hidden">
+    <div class="answer" id="answer"></div>
+    <details style="margin-top:10px"><summary class="muted">SQL and result</summary><pre id="sql"></pre><div class="tablewrap" id="table"></div></details>
+    <div class="fb">
+      <button id="up" title="Correct">👍</button><button id="down" title="Wrong">👎</button>
+      <button id="fixbtn">Correct the SQL</button><span id="status" class="muted"></span>
+    </div>
+    <div id="fix" class="hidden" style="margin-top:10px">
+      <textarea id="fixsql" placeholder="SELECT ... (the query that actually answers the question)"></textarea>
+      <div class="fb"><button id="sendfix" class="primary">Submit correction</button></div>
+    </div>
+  </div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let spanId = null;
+  const esc = (s) => String(s ?? "NULL").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  $("ask").onsubmit = async (e) => {
+    e.preventDefault();
+    $("status").textContent = ""; $("fix").classList.add("hidden");
+    $("out").classList.remove("hidden"); $("answer").textContent = "Thinking…"; $("sql").textContent = ""; $("table").innerHTML = "";
+    const res = await fetch("/api/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: $("q").value }) });
+    const data = await res.json();
+    if (!res.ok) { $("answer").textContent = data.error; return; }
+    spanId = data.spanId;
+    $("answer").textContent = data.answer || "(no answer)";
+    $("sql").textContent = data.sql || "(no SQL)"; $("fixsql").value = data.sql || "";
+    if (data.error) $("table").innerHTML = `<p class="bad">${esc(data.error)}</p>`;
+    else if (data.columns.length) $("table").innerHTML = `<table><tr>${data.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>${data.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>`;
+  };
+  async function feedback(body) {
+    const res = await fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ spanId, ...body }) });
+    const data = await res.json();
+    $("status").innerHTML = res.ok ? '<span class="ok">Thanks! Logged.</span>' : `<span class="bad">${esc(data.error)}</span>`;
+    return res.ok;
+  }
+  $("up").onclick = () => feedback({ rating: "up" });
+  $("down").onclick = () => { feedback({ rating: "down" }); $("fix").classList.remove("hidden"); };
+  $("fixbtn").onclick = () => $("fix").classList.toggle("hidden");
+  $("sendfix").onclick = async () => { if (await feedback({ rating: "down", correctedSql: $("fixsql").value })) $("fix").classList.add("hidden"); };
+</script>
+</body>
+</html>
