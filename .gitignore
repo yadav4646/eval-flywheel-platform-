@@ -11,3 +11,6 @@ flywheel/state/*.json
 coverage/
 .DS_Store
 reports/latest.md
+/gate*.md
+/attribution*.md
+/curation.md
