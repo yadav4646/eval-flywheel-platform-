@@ -1,0 +1,56 @@
+name: curate-nightly
+
+# Closes the flywheel: yesterday's production traces -> new golden cases -> a PR
+# a human reviews. Needs BRAINTRUST_API_KEY (traces) and OPENAI_API_KEY
+# (embeddings for dedupe, gold SQL drafts).
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Pull traces created after this ISO timestamp (default: 24h ago)"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      READY: ${{ secrets.OPENAI_API_KEY != '' && secrets.BRAINTRUST_API_KEY != '' }}
+    steps:
+      - name: Skip notice
+        if: env.READY != 'true'
+        run: echo "Needs OPENAI_API_KEY and BRAINTRUST_API_KEY secrets; skipping." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.READY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.READY == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.READY == 'true'
+        run: npm ci && npm run db:seed
+      - name: Curate
+        if: env.READY == 'true'
+        run: |
+          SINCE="${{ github.event.inputs.since }}"
+          if [ -z "$SINCE" ]; then SINCE=$(date -u -d '-1 day' +%Y-%m-%dT%H:%M:%SZ); fi
+          npm run curate -- --source braintrust --since "$SINCE" --report curation.md
+          cat curation.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Open PR with new cases
+        if: env.READY == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: curation/nightly
+          add-paths: evals/datasets/golden.jsonl
+          commit-message: "Curate new eval cases from production traces"
+          title: "Curated eval cases from production traces"
+          body-path: curation.md
+          labels: eval-data

@@ -1,0 +1,108 @@
+name: evals
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Always runs, no secrets needed: unit tests + the whole pipeline on the deterministic mock.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:seed
+      - run: npm run typecheck
+      - run: npm test
+      - name: Mock eval
+        run: npm run eval -- --mock --ci --no-send --out results/mock-head.json
+      - name: Mock gate vs committed mock baseline
+        id: gate
+        run: npm run gate -- --head results/mock-head.json --base reports/baseline.mock.json --report gate-mock.md
+      - name: Attribution (on failure)
+        if: failure() && steps.gate.outcome == 'failure'
+        run: npm run attribute -- --head results/mock-head.json --base reports/baseline.mock.json --report attribution-mock.md
+      - name: Job summary
+        if: always()
+        run: cat gate-mock.md attribution-mock.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+  # Runs the real agent + judge when OPENAI_API_KEY is configured (and logs to
+  # Braintrust when BRAINTRUST_API_KEY is). Gates against reports/baseline.json.
+  real-evals:
+    needs: checks
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
+    steps:
+      - name: Skip notice
+        if: env.HAS_OPENAI != 'true'
+        run: echo "OPENAI_API_KEY secret not set; skipping real evals (mock gate still ran)." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.HAS_OPENAI == 'true'
+        with:
+          fetch-depth: 50
+      - uses: actions/setup-node@v4
+        if: env.HAS_OPENAI == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.HAS_OPENAI == 'true'
+        run: npm ci && npm run db:seed
+      - name: Eval (k=3, real model, logged to Braintrust if keyed)
+        if: env.HAS_OPENAI == 'true'
+        run: npm run eval -- --ci --label "ci-${{ github.event.pull_request.number || github.sha }}" --out results/head.json
+      - name: Gate
+        id: gate
+        if: env.HAS_OPENAI == 'true'
+        continue-on-error: true
+        run: npm run gate -- --head results/head.json --report gate.md
+      - name: Attribution
+        if: env.HAS_OPENAI == 'true' && steps.gate.outcome == 'failure' && hashFiles('reports/baseline.json') != ''
+        run: npm run attribute -- --head results/head.json --report attribution.md
+      - name: Comment on PR
+        if: env.HAS_OPENAI == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "");
+            const marker = "<!-- eval-flywheel -->";
+            const body = [marker, read("gate.md"), read("attribution.md")].filter(Boolean).join("\n\n").slice(0, 64000);
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const mine = comments.find((c) => c.body && c.body.startsWith(marker));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+      - name: Upload results
+        if: always() && env.HAS_OPENAI == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            results/
+            gate.md
+            attribution.md
+          if-no-files-found: ignore
+      - name: Job summary
+        if: always() && env.HAS_OPENAI == 'true'
+        run: cat gate.md attribution.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: Fail if the gate failed
+        if: env.HAS_OPENAI == 'true' && steps.gate.outcome == 'failure'
+        run: exit 1
