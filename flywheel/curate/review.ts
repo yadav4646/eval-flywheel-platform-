@@ -3,8 +3,7 @@
 //
 //   npm run curate:review
 
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout } from "node:process";
+import { createPrompter } from "../label/prompt";
 import { assertReadOnly, tryRunSql } from "../../agent/db";
 import { loadGolden, saveGolden } from "../../evals/dataset";
 
@@ -12,7 +11,7 @@ export async function review() {
   const cases = loadGolden();
   const pending = cases.filter((c) => c.status === "candidate");
   if (!pending.length) return console.log("No candidate cases to review.");
-  const rl = createInterface({ input: stdin, output: stdout });
+  const rl = createPrompter();
   console.log(`${pending.length} candidates. [a] accept as capability · [r] accept as regression · [e] edit gold SQL · [x] reject · [s] skip · [q] quit\n`);
   try {
     for (const c of pending) {
@@ -24,14 +23,14 @@ export async function review() {
         console.log("error" in res ? `  ERROR: ${res.error}` : `  → ${res.rowCount} rows: ${JSON.stringify(res.rows.slice(0, 5))}`);
       }
       let choice = "";
-      while (!["a", "r", "e", "x", "s", "q"].includes(choice)) choice = (await rl.question("> ")).trim().toLowerCase();
+      while (!["a", "r", "e", "x", "s", "q"].includes(choice)) choice = ((await rl.ask("> ")) ?? "q").trim().toLowerCase();
       if (choice === "q") break;
       if (choice === "s") continue;
       if (choice === "x") {
         cases.splice(cases.indexOf(c), 1);
       } else {
         if (choice === "e") {
-          const sql = (await rl.question("New gold SQL (empty = unanswerable): ")).trim();
+          const sql = ((await rl.ask("New gold SQL (empty = unanswerable): ")) ?? "").trim();
           if (sql) {
             try {
               assertReadOnly(sql);

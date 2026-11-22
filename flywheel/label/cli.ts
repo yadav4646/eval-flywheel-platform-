@@ -5,8 +5,7 @@
 //
 //   npm run label -- --n 20 [--run results/<id>.json] [--labeler you]
 
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout } from "node:process";
+import { createPrompter } from "./prompt";
 import { userInfo } from "node:os";
 import { rng } from "../../db/seed";
 import { JUDGE_LABELS, type JudgeLabel } from "../../evals/scorers/judge";
@@ -69,7 +68,7 @@ export async function labelCli({ runPath, n, labeler }: { runPath?: string; n: n
   const items = sampleForLabeling(run, done, n);
   if (!items.length) return console.log("Nothing new to label in this run.");
   const who = labeler ?? process.env.LABELER ?? userInfo().username;
-  const rl = createInterface({ input: stdin, output: stdout });
+  const rl = createPrompter();
   console.log(`\nLabeling ${items.length} answers from ${run.runId} as "${who}". The judge's verdict is hidden on purpose.\n`);
   console.log("Grades: 1 wrong · 2 weak · 3 acceptable · 4 great   (s = skip, q = quit)\n");
   let saved = 0;
@@ -81,11 +80,11 @@ export async function labelCli({ runPath, n, labeler }: { runPath?: string; n: n
       console.log(it.error ? `  ERROR: ${it.error}` : table(it.columns, it.rows));
       console.log(`\nAnswer: ${it.answer}\n`);
       let grade: string;
-      do grade = (await rl.question("Grade [1-4/s/q]: ")).trim().toLowerCase();
+      do grade = ((await rl.ask("Grade [1-4/s/q]: ")) ?? "q").trim().toLowerCase();
       while (!["1", "2", "3", "4", "s", "q"].includes(grade));
       if (grade === "q") break;
       if (grade === "s") continue;
-      const notes = (await rl.question("Note (optional): ")).trim();
+      const notes = ((await rl.ask("Note (optional): ")) ?? "").trim();
       const { judgeLabel: _hidden, ...snapshot } = it;
       appendLabel({
         ...snapshot,

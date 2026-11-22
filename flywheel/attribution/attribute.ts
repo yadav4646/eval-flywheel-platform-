@@ -16,6 +16,7 @@ import { BEHAVIOR_COMPONENTS, COMPONENTS, diffFingerprints, MEASUREMENT_COMPONEN
 import { judgeModel } from "../models";
 import { num, pct } from "../report";
 import type { RunFile } from "../results";
+import type { GoldenCase } from "../../evals/dataset";
 import { ablate, ABLATABLE, type Ablation } from "./ablate";
 import { bisect, type BisectResult } from "./bisect";
 import { compareCases, passRate, scorerMean, type CaseDelta } from "./compare";
@@ -44,7 +45,7 @@ export interface AttributionResult {
   verdict: string;
 }
 
-export async function attribute(base: RunFile, head: RunFile, opts: { ablate?: boolean; bisect?: boolean } = {}): Promise<AttributionResult> {
+export async function attribute(base: RunFile, head: RunFile, opts: { ablate?: boolean; bisect?: boolean; golden?: GoldenCase[] } = {}): Promise<AttributionResult> {
   if (base.mode !== head.mode) throw new Error(`Cannot compare a ${base.mode} run with a ${head.mode} run.`);
   const changed = diffFingerprints(base.fingerprint, head.fingerprint);
   const headIds = new Set(head.cases.map((c) => c.id));
@@ -53,7 +54,7 @@ export async function attribute(base: RunFile, head: RunFile, opts: { ablate?: b
 
   // 3. Re-score base outputs under the head's measurement.
   const judgeChanged = changed.includes("judge") && head.judge.enabled;
-  const rescored = await rescoreRun(base, { judge: judgeChanged ? judgeModel(head.mode === "mock") : undefined, judgeTrusted: head.judge.trusted });
+  const rescored = await rescoreRun(base, { judge: judgeChanged ? judgeModel(head.mode === "mock") : undefined, judgeTrusted: head.judge.trusted, golden: opts.golden });
   const baseC = base.cases.filter((c) => commonIds.has(c.id));
   const baseR = rescored.filter((c) => commonIds.has(c.id));
   const headC = head.cases.filter((c) => commonIds.has(c.id));

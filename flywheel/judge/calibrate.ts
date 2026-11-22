@@ -83,7 +83,7 @@ export async function calibrate({ mock, labels = loadLabels(), out = CALIBRATION
 export function renderCalibration(cal: Calibration): string {
   const trusted = cal.test.n >= config.judge.minTestLabels && cal.test.kappa >= config.judge.minKappa;
   const row = (name: string, m: SplitMetrics) =>
-    `| ${name} | ${m.n} | ${pct(m.exact)} | ${pct(m.withinOne)} | ${num(m.kappa)} (${num(m.kappaCI[0])}–${num(m.kappaCI[1])}) | ${pct(m.binary.agreement)} | ${pct(m.binary.tpr)} / ${pct(m.binary.tnr)} |`;
+    `| ${name} | ${m.n} | ${pct(m.exact)} | ${pct(m.withinOne)} | ${Number.isNaN(m.kappa) ? "–" : `${num(m.kappa)} (${num(m.kappaCI[0])}–${num(m.kappaCI[1])})`} | ${pct(m.binary.agreement)} | ${pct(m.binary.tpr)} / ${pct(m.binary.tnr)} |`;
   const cm = cal.test.confusion;
   return [
     `## Judge calibration: \`${cal.judgeModel}\` (judge hash \`${cal.judgeHash}\`)`,
