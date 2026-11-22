@@ -144,7 +144,7 @@ export function mockAnalystModel({ modelId = "mock-analyst" }: MockOptions = {})
           .filter((p) => p.type === "tool-call" && p.toolName === "runQuery")
           .pop() as { input: unknown } | undefined;
         const input = typeof lastQuery?.input === "string" ? JSON.parse(lastQuery.input) : lastQuery?.input;
-        const sloppyAnswer = rng(hash32(`${key}#${trial}#${modelId}#answer`))() < 0.04;
+        const sloppyAnswer = rng(hash32(`${key}#${trial}#${modelId}#answer`))() < 0.015;
         const answer = sloppyAnswer ? "Here is the breakdown you asked for." : describeRows(ranQuery.value);
         return result([toolCall("submitAnswer", { sql: input?.sql ?? "", answer }, callId(2))], "tool-calls");
       }
@@ -152,7 +152,7 @@ export function mockAnalystModel({ modelId = "mock-analyst" }: MockOptions = {})
       // Decide what to do with the question.
       const unanswerable = entry ? entry.sql === null : UNANSWERABLE_HINTS.test(user);
       if (unanswerable) {
-        if (r() < 0.88) {
+        if (r() < 0.96) {
           return result(
             [toolCall("submitAnswer", { sql: "", answer: "The database doesn't contain that information, so I can't answer it." }, callId(1))],
             "tool-calls",
@@ -165,10 +165,10 @@ export function mockAnalystModel({ modelId = "mock-analyst" }: MockOptions = {})
       const isRevenue = /discount_pct|status NOT IN/.test(goldSql);
       const hasGlossary = /business glossary/i.test(system);
       const hasSchemaRule = /never guess column names/i.test(system);
-      const base = { easy: 0.02, medium: 0.1, hard: 0.25 }[entry?.difficulty ?? "medium"] + (entry?.ambiguous ? 0.1 : 0);
+      const base = { easy: 0.01, medium: 0.03, hard: 0.2 }[entry?.difficulty ?? "medium"] + (entry?.ambiguous ? 0.05 : 0);
       let pErr = base;
       if (!hasGlossary && isRevenue) pErr += 0.65;
-      if (!hasSchemaRule) pErr += 0.08;
+      if (!hasSchemaRule) pErr += 0.1;
       if (/nano/.test(modelId)) pErr += 0.15;
       const sql = r() < Math.min(0.95, pErr) ? mutate(goldSql, r, !hasGlossary && isRevenue) : goldSql;
       return result([toolCall("runQuery", { sql }, callId(1))], "tool-calls");

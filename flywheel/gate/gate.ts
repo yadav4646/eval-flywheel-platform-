@@ -29,7 +29,9 @@ export function gate(head: RunFile, base?: RunFile): GateVerdict {
   const g = config.gate;
   const checks: Check[] = [];
   const reg = head.summary.regression;
-  const k = reg.trialsPerCase;
+  // Reliability is always judged as pass^K with K = the CI trial count, estimated
+  // from however many trials were run, so a local k=5 run faces the same bar as CI.
+  const k = Math.min(config.eval.trials.ci, reg.trialsPerCase);
 
   // 1. Absolute reliability of the regression suite.
   if (!reg.cases) checks.push({ name: "Regression reliability", status: "skip", detail: "no reviewed regression cases in this run" });
