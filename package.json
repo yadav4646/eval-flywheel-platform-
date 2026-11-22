@@ -8,20 +8,20 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "db:seed": "tsx db/seed.ts",
-    "serve": "tsx server/index.ts",
-    "simulate": "tsx scripts/simulate-traffic.ts",
-    "eval": "tsx flywheel/cli.ts eval",
-    "curate": "tsx flywheel/cli.ts curate",
-    "curate:review": "tsx flywheel/cli.ts review",
-    "label": "tsx flywheel/cli.ts label",
-    "judge:calibrate": "tsx flywheel/cli.ts calibrate",
-    "attribute": "tsx flywheel/cli.ts attribute",
-    "gate": "tsx flywheel/cli.ts gate",
-    "baseline:update": "tsx flywheel/cli.ts baseline",
-    "flywheel": "tsx flywheel/cli.ts",
+    "db:seed": "tsx --disable-warning=ExperimentalWarning db/seed.ts",
+    "serve": "tsx --disable-warning=ExperimentalWarning server/index.ts",
+    "simulate": "tsx --disable-warning=ExperimentalWarning scripts/simulate-traffic.ts",
+    "eval": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts eval",
+    "baseline:update": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts baseline",
+    "gate": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts gate",
+    "attribute": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts attribute",
+    "curate": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts curate",
+    "curate:review": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts review",
+    "label": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts label",
+    "judge:calibrate": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts calibrate",
+    "flywheel": "tsx --disable-warning=ExperimentalWarning flywheel/cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.122",
