@@ -31,7 +31,7 @@ Everything also runs **without API keys** (`--mock`). Deterministic mock models 
 
 ## Quick start
 
-Requires Node ≥ 22.13 (uses built-in `node:sqlite`).
+Requires Node ≥ 22.13 (uses built-in `node:sqlite`); `nvm use` picks it up from `.nvmrc`.
 
 ```bash
 npm install
